@@ -32,17 +32,19 @@ from typing import Any
 from urllib.parse import urlsplit
 import uuid
 
+from jepa_runtime import ROOT, settings
+
 SCHEMA = "optimized-model-worker-v1"
-HOST, PORT = "127.0.0.1", 5004
+HOST, PORT = "127.0.0.1", settings().worker_port
 MAX_BODY_BYTES = 64 * 1024
 MAX_BUNDLE_BYTES = 64 * 1024 * 1024
-OUTPUT_ROOT = Path("/mnt/e/jepa-system/output")
-VIDEO_ROOT = Path("/mnt/c/Users/admin/Desktop/测试")
-R3D_CHECKPOINT = Path("/home/zzy/.cache/torch/hub/checkpoints/r3d_18-b3b3357e.pth")
-V_ENCODER = Path("/home/zzy/vjepa2-main/checkpoints/encoder_only.pt")
-V_PREDICTOR = Path("/home/zzy/vjepa2-main/checkpoints/vjepa2_1_vitg_384.pt")
-I_SLIM = Path("/home/zzy/ijepa-main/checkpoints/ijepa_true_slim_bf16.pt")
-I_FULL = Path("/home/zzy/ijepa-main/checkpoints/IN22K-vit.g.16-600e.pth.tar")
+OUTPUT_ROOT = ROOT / "output"
+VIDEO_ROOT = settings().data_root
+R3D_CHECKPOINT = settings().resources["r3d_checkpoint"]
+V_ENCODER = settings().resources["vjepa_encoder"]
+V_PREDICTOR = settings().resources["vjepa_predictor"]
+I_SLIM = settings().resources["ijepa_checkpoint"]
+I_FULL = I_SLIM  # One explicit, hash-pinned checkpoint; no guessing another file.
 REQUEST_FIELDS = frozenset(("sourcevideo", "video", "output", "channels", "profile_json"))
 VIDEO_SUFFIXES = frozenset((".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v"))
 CORRECTED_NAMES = [prefix + "_" + suffix for prefix in ("v", "i") for suffix in (
@@ -286,7 +288,8 @@ class LocalAdapters:
         return self.module("optimized_jepa_extractor").sample_video(video, config)
 
     def isolation(self, kind):
-        return self.module("optimized_jepa_extractor").isolated_legacy_module(kind)
+        from configured_model_loaders import isolated_legacy_module
+        return isolated_legacy_module(kind)
 
     def make_backend(self, kind, legacy, config, identity):
         if not legacy.torch.cuda.is_available():
@@ -341,10 +344,11 @@ class LocalAdapters:
 
 
 class FeatureWorker:
-    def __init__(self, adapters=None, policy=None):
+    def __init__(self, adapters=None, policy=None, retain_models=True):
         self.adapters = adapters if adapters is not None else LocalAdapters()
         self.policy = policy if policy is not None else PathPolicy()
         self.models: dict[str, ModelEntry] = {}
+        self.retain_models = retain_models
         self.lock = threading.Lock()
         self.busy, self.closed = False, False
         self.active_isolation = None
@@ -353,6 +357,7 @@ class FeatureWorker:
     def health(self):
         return {"schema": SCHEMA, "status": "closed" if self.closed else "ok",
                 "worker_code_sha256": self.worker_code_sha256, "processing": "serial", "busy": self.busy,
+                "project_root": str(ROOT), "runtime_config_id": settings().config_id, "retain_models": self.retain_models,
                 "hot_models": [kind for kind, entry in self.models.items() if entry.state == "ready"],
                 "failed_models": [kind for kind, entry in self.models.items() if entry.state == "failed"]}
 
@@ -461,6 +466,10 @@ class FeatureWorker:
                 profiles = bundle.get("feature_profiles") if isinstance(bundle, dict) else None
                 if not isinstance(profiles, dict):
                     raise WorkerError("missing_bundle_profile", "bundle feature_profiles object is required; no defaults or legacy profile fallback", 422)
+                from published_models import resolve_profiles, digest_json
+                declared_profile_id = digest_json(profiles)
+                profiles = resolve_profiles(profiles)
+                state["identity"]["declared_feature_profiles_sha256"] = declared_profile_id
                 self.adapters.validate_profiles(profiles, channels)
                 state["identity"]["bundle"] = {"path": str(bundle_path), "sha256": hashlib.sha256(bundle_bytes).hexdigest()}
                 for channel in channels:
@@ -500,6 +509,8 @@ class FeatureWorker:
                     state["channel_status"]["rgb"] = "ok"
                     state["timings"]["rgb_seconds"] = time.perf_counter() - begin
                     state["alignment"]["rgb_frame_count_source"] = "all_decoded_frames"
+                    if not self.retain_models:
+                        self._release_model("rgb")
                 if "corrected" in channels:
                     begin = time.perf_counter()
                     profile = profiles["corrected"]
@@ -517,9 +528,11 @@ class FeatureWorker:
                                 raise WorkerError("missing_model_evidence", kind + " produced no valid genuine evidence", 500, "inference")
                             results[kind] = evidence
                             model_stats[kind] = dict(getattr(backend, "stats", {}))
+                        if not self.retain_models:
+                            self._release_model(kind)
                     arrays, metadata = self.adapters.build_artifacts(video, sampled, results, config,
                         {"models": model_stats, "worker_model_load_status": dict(state["model_load_status"]),
-                         "processing": "serial", "hot_weights_retained": True})
+                         "processing": "serial", "hot_weights_retained": self.retain_models})
                     self.adapters.write_raw(output / "raw", arrays, metadata)
                     state["paths"].update({"raw_npz": str(output / "raw" / "signals.npz"),
                                            "raw_json": str(output / "raw" / "signals.json")})
@@ -567,6 +580,18 @@ class FeatureWorker:
             finally:
                 self.busy = False
             return status, state
+
+    def _release_model(self, kind):
+        entry = self.models.pop(kind, None)
+        if entry is None:
+            return
+        if kind == "rgb":
+            self.adapters.close_rgb(entry.resource)
+        else:
+            if self.active_isolation is not None:
+                raise RuntimeError("model release must not overlap an active legacy scope")
+            with self.adapters.isolation(kind):
+                self.adapters.close_backend(kind, entry.resource)
 
     def close(self):
         """Release all models once, in non-overlapping legacy scopes, at shutdown."""
@@ -708,17 +733,27 @@ class WorkerHandler(BaseHTTPRequestHandler):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--config", help="local runtime TOML; no resources are downloaded")
     parser.add_argument("--serve", action="store_true")
     parser.add_argument("--video")
     parser.add_argument("--output")
     parser.add_argument("--channels", default="rgb,corrected")
     parser.add_argument("--profile-json")
     args = parser.parse_args(argv)
+    if args.config:
+        import os
+        os.environ["JEPA_CONFIG"] = str(Path(args.config).resolve())
+    cfg = settings()
+    global PORT, VIDEO_ROOT, R3D_CHECKPOINT, V_ENCODER, V_PREDICTOR, I_SLIM, I_FULL
+    PORT, VIDEO_ROOT = cfg.worker_port, cfg.data_root
+    R3D_CHECKPOINT = cfg.resources["r3d_checkpoint"]
+    V_ENCODER, V_PREDICTOR = cfg.resources["vjepa_encoder"], cfg.resources["vjepa_predictor"]
+    I_SLIM = I_FULL = cfg.resources["ijepa_checkpoint"]
     if args.serve and any((args.video, args.output, args.profile_json)):
         parser.error("--serve cannot be combined with single-video arguments")
     if not args.serve and not all((args.video, args.output, args.profile_json)):
         parser.error("single-video CLI requires --video, --output and --profile-json")
-    worker = FeatureWorker()
+    worker = FeatureWorker(policy=PathPolicy(output_root=OUTPUT_ROOT, video_roots=(OUTPUT_ROOT, VIDEO_ROOT), bundle_root=OUTPUT_ROOT), retain_models=cfg.retain_models)
     if args.serve:
         server = None
         def stop(signum, frame):

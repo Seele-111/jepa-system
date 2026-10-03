@@ -186,5 +186,8 @@ def export_model(model) -> dict:
 
 def load_bundle(path: str|Path) -> dict:
     bundle=json.loads(Path(path).read_text(encoding='utf-8'))
-    if bundle.get('schema_version')!=SCHEMA:raise ValueError('unsupported locator bundle')
+    if not isinstance(bundle,dict) or bundle.get('schema_version')!=SCHEMA:raise ValueError('unsupported locator bundle')
+    if "publication" in bundle:
+        from published_models import validate_bundle
+        validate_bundle(bundle,path)
     return bundle

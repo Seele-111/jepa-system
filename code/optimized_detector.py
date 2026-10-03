@@ -12,8 +12,9 @@ from optimized_calibration_state import validate_calibration_state, apply_calibr
 from optimized_motion_features import extract_video_features
 
 ROOT=Path(__file__).resolve().parents[1]
-DEFAULT_BUNDLE=ROOT/'models'/'optimized_locator_v1.json'
-WORKER_URL='http://127.0.0.1:5004'
+from jepa_runtime import settings, runtime_path, host_path, model_command
+DEFAULT_BUNDLE=settings().full_bundle
+WORKER_URL=settings().worker_url
 
 
 def _required_channels_base(bundle):
@@ -214,18 +215,19 @@ def _request_features(video, output, bundle_path, channels, timeout):
     hot=False
     try:
         with local_open(WORKER_URL+'/health',timeout=2) as response:health=json.load(response)
-        hot=health.get('worker_code_sha256')==expected and health.get('processing')=='serial'
+        hot=(health.get('worker_code_sha256')==expected and health.get('processing')=='serial'
+             and health.get('project_root')==runtime_path(ROOT) and health.get('runtime_config_id')==settings().config_id)
     except (URLError,OSError,ValueError):pass
-    payload={'video':to_wsl(video),'output':to_wsl(output),'channels':sorted(channels),
-             'profile_json':to_wsl(bundle_path)}
+    payload={'video':runtime_path(video),'output':runtime_path(output),'channels':sorted(channels),
+             'profile_json':runtime_path(bundle_path)}
     if hot:
         request=Request(WORKER_URL+'/infer',data=json.dumps(payload).encode('utf-8'),headers={'Content-Type':'application/json'},method='POST')
         with local_open(request,timeout=timeout) as response:result=json.load(response)
         transport='hot_local_worker'
     else:
-        command=['wsl.exe','-d','Ubuntu-24.04','--','/home/zzy/vjepa2-main/vjepa-env/bin/python',
-                 to_wsl(ROOT/'code'/'optimized_model_worker.py'),'--video',payload['video'],'--output',payload['output'],
-                 '--channels',','.join(sorted(channels)),'--profile-json',payload['profile_json']]
+        command=model_command(ROOT/'code'/'optimized_model_worker.py',
+                 ['--video',payload['video'],'--output',payload['output'],
+                  '--channels',','.join(sorted(channels)),'--profile-json',payload['profile_json']])
         proc=subprocess.run(command,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=timeout,check=False)
         from demo_detector import _decode_process_bytes
         lines=_decode_process_bytes(proc.stdout).splitlines()
@@ -283,7 +285,7 @@ def analyze_optimized_video(video_path, output_dir, *, bundle_path=DEFAULT_BUNDL
         worker_result=_request_features(video,feature_out,profile_copy,gpu_channels,timeout)
         if worker_result['total_frames']!=frames or not np.isclose(worker_result['fps'],fps):raise DemoDetectionError('worker frame/FPS mismatch')
         for channel in gpu_channels:
-            info=worker_result['features'][channel];path=from_wsl(info['npz_path']).resolve()
+            info=worker_result['features'][channel];path=host_path(info['npz_path']).resolve()
             if not path.is_relative_to(feature_out):raise DemoDetectionError('worker artifact escapes its fresh output directory')
             with np.load(path,allow_pickle=False) as archive:
                 key=info.get('feature_key','features' if channel=='rgb' else 'signals')
@@ -295,7 +297,8 @@ def analyze_optimized_video(video_path, output_dir, *, bundle_path=DEFAULT_BUNDL
         provenance['feature_worker']=worker_result
     progress('学习型定位、视频拒识及多片段精边界',72)
     prediction=predict_record(bundle,record);score=prediction['score'];segments=learned_segments(prediction,fps)
-    digest=source_digest(video);seen=digest in bundle.get('training_video_sha256',[])
+    digest=source_digest(video);seen=(None if bundle.get('publication',{}).get('training_membership')=='not_distributed'
+                                  else digest in bundle.get('training_video_sha256',[]))
     true_jepa='corrected' in channels
     method='optimized_true_jepa_motion' if true_jepa else 'optimized_rgb_motion' if 'rgb' in channels else 'optimized_motion'
     label=('Optimized true V/I-JEPA + motion + RGB temporal' if 'rgb' in channels else 'Optimized true V/I-JEPA + learned motion') if true_jepa else 'Frozen R3D + learned motion (not JEPA)' if 'rgb' in channels else ('Learned global + local motion (not JEPA)' if 'local' in channels else 'Learned absolute motion (not JEPA)')
@@ -304,7 +307,8 @@ def analyze_optimized_video(video_path, output_dir, *, bundle_path=DEFAULT_BUNDL
               '这是上传后离线定位，使用了前后文；不承诺在线实时或所有异常都能检测。']
     diagnostic=bool(bundle.get('diagnostic_only',False))
     if diagnostic:warnings.append('此模型是未通过默认部署验收的实验候选；仅供诊断复核，未替换当前演示默认模型。')
-    if seen:warnings.append('此视频哈希匹配训练开发集：本次重算验证功能与速度，不代表未见视频泛化。')
+    if seen is None:warnings.append('公开模型不分发开发视频指纹：无法判断输入是否曾参与开发；此次体验不是独立盲测。')
+    elif seen:warnings.append('此视频哈希匹配训练开发集：本次重算验证功能与速度，不代表未见视频泛化。')
     else:warnings.append('此视频未匹配本轮开发集哈希；这本身仍不能算一次规范的新盲测。')
     profile={'name':'optimized-learned-locator-v1','recipe':bundle['recipe'],'decoder':bundle['decoder'],
              'fixed_feature_profile':True,'score_units':'uncalibrated_learned_evidence'}

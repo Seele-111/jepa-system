@@ -1,0 +1,25 @@
+# Copy to jepa-runtime.toml (ignored by Git); set JEPA_CONFIG for another location.
+# The default checkout supports learned CPU motion without GPU resources.
+[runtime]
+transport = "native"                 # Linux/native Python; Windows can use "wsl"
+# python = "/path/to/venv/bin/python" # native model environment; default: current Python
+wsl_distro = "Ubuntu-24.04"
+wsl_python = "python3"               # use your WSL virtualenv interpreter for GPU modes
+worker_port = 5004
+retain_models = true                 # false releases each GPU model/channel to save VRAM
+
+# Paths below belong to the model runtime. Use Linux paths when transport="wsl".
+# Relative paths resolve against the checkout, not the user's home directory.
+[resources]
+vjepa_source = "resources/vjepa2"
+ijepa_source = "resources/ijepa"
+vjepa_encoder = "resources/checkpoints/encoder_only.pt"
+vjepa_predictor = "resources/checkpoints/vjepa2_1_vitg_384.pt"
+ijepa_checkpoint = "resources/checkpoints/ijepa_true_slim_bf16.pt"
+r3d_checkpoint = "resources/checkpoints/r3d_18-b3b3357e.pth"
+
+[demo]
+default_algorithm = "optimized_fast" # explicit CPU learned mode; no silent JEPA impersonation
+# data_root = "/path/to/your/videos" # additional local input directory, optional
+# full_bundle = "models/public/locator.json"
+# motion_bundle = "models/public/motion.json"

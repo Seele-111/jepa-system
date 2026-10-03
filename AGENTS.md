@@ -11,7 +11,8 @@
 ## Data and publication
 
 - `.gitignore` intentionally admits only source directories and curated documentation. New root/doc paths require a deliberate publication decision.
-- Never commit user videos/annotations, `.env`, credentials, checkpoints, portable trained bundles, caches, logs, or old reports with private provenance.
+- Never commit user videos/annotations, `.env`, credentials, third-party checkpoints, original portable trained bundles, caches, logs, or old reports with private provenance.
+- Explicit owner-approved exception (2026-10-03): only the reviewed inference-only `models/public/locator.json` and `models/public/motion.json`, their registry and readout license may be published. Do not broaden this exception, copy raw model metadata, or admit new models without a separate review/authorization.
 - Do not edit or rehash model metadata to bypass checkpoint, feature-profile, or provenance validation.
 - Project-owned code is licensed under the root MIT `LICENSE`, as explicitly approved by the owner. Do not change that license without authorization or apply it to excluded third-party resources.
 - Third-party copies require verified upstream license/provenance before redistribution.
@@ -20,8 +21,8 @@
 ## Runtime and checks
 
 - Frontend: `python code/demo_app.py`, localhost port 5002.
-- GPU worker: `python -B code/optimized_model_worker.py --serve` in the correctly configured WSL environment, localhost port 5004. Read its fixed paths/profile checks first.
-- Minimal demo packages are in `requirements-demo.txt`; they do not define a complete training environment.
+- GPU worker: `python -B code/optimized_model_worker.py --config LOCAL_TOML --serve` in the configured native/WSL model environment, localhost port 5004 by default. Read `docs/RESOURCE_SETUP.md`, the path policy and strict profile checks first; never download resources at app startup.
+- Minimal demo and learned CPU packages are in `requirements-demo.txt`; `requirements-models.txt` plus the explicitly documented Torch environment cover product GPU paths, not all historical training experiments.
 - Focused check: `python -m unittest discover -s code -p "test_demo.py" -v`.
 - Portable check: `python -m unittest discover -s code -p "test_optimized_locator.py" -v`; report optional sklearn skips honestly.
 - Broader tests may require local bundles, real feature caches, CUDA, or research dependencies. Never claim these checks passed if they did not run.

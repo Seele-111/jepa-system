@@ -5,3 +5,5 @@
 .gitattributes text eol=lf
 requirements-demo.txt text eol=lf
 LICENSE text eol=lf
+requirements-models.txt text eol=lf
+jepa-runtime.example.toml text eol=lf

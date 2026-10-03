@@ -1,4 +1,4 @@
-# Source-only publication: root paths must be deliberately admitted.
+# Curated publication: root paths and inference-only model exceptions are deliberate.
 /*
 !/.gitignore
 !/.gitattributes
@@ -8,6 +8,8 @@
 !/CONTRIBUTING.md
 !/THIRD_PARTY_NOTICES.md
 !/requirements-demo.txt
+!/requirements-models.txt
+!/jepa-runtime.example.toml
 !/code/
 !/scripts/
 !/docs/
@@ -18,8 +20,18 @@
 !/docs/RUNNING.md
 !/docs/PROJECT_STATUS.md
 !/docs/REPOSITORY_GUIDE.md
+!/docs/RESOURCE_SETUP.md
+!/docs/REPRODUCIBLE_RELEASE.md
 /models/*
 !/models/README.md
+
+# Owner-approved exception: two reviewed inference-only readouts, never originals.
+!/models/public/
+/models/public/*
+!/models/public/locator.json
+!/models/public/motion.json
+!/models/public/registry.json
+!/models/public/LICENSE
 
 # Third-party copies need separate provenance and license review.
 /code/depth_anything_v2/

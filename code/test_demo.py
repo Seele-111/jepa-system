@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
@@ -104,6 +105,51 @@ class WebChecks(unittest.TestCase):
         self.jobs_patch = patch.object(web, "jobs", {})
         self.jobs_patch.start()
         self.client = web.app.test_client()
+
+    def test_capabilities_distinguish_package_from_unchecked_gpu(self):
+        cfg = SimpleNamespace(default_algorithm="optimized_fast", motion_bundle=self.root / "motion.json",
+                              full_bundle=self.root / "locator.json")
+        for path in (cfg.motion_bundle, cfg.full_bundle):
+            path.write_text("{}", encoding="utf-8")
+        with patch.object(web, "settings", return_value=cfg), patch.object(web, "load_bundle", return_value={"publication": {"kind": "inference-only"}}):
+            data = self.client.get("/api/capabilities").get_json()
+        self.assertTrue(data["modes"]["optimized_fast"]["usable"])
+        self.assertTrue(data["modes"]["optimized"]["bundle_verified"])
+        self.assertIsNone(data["modes"]["optimized"]["usable"])
+        self.assertEqual(data["modes"]["optimized"]["resource_readiness"], "not_checked")
+        self.assertFalse(data["cuda_or_resources_verified"])
+        self.assertNotIn(str(self.root), json.dumps(data))
+
+    def test_capabilities_legacy_schema_is_only_readable_not_verified(self):
+        cfg = SimpleNamespace(default_algorithm="optimized_fast", motion_bundle=self.root / "motion.json",
+                              full_bundle=self.root / "locator.json")
+        with patch.object(web, "settings", return_value=cfg), patch.object(web, "load_bundle", return_value={}):
+            data = self.client.get("/api/capabilities").get_json()
+        cpu = data["modes"]["optimized_fast"]
+        self.assertTrue(cpu["bundle_readable"])
+        self.assertFalse(cpu["bundle_verified"])
+        self.assertIsNone(cpu["usable"])
+        self.assertEqual(cpu["validation_level"], "legacy_schema_only")
+
+    def test_capabilities_invalid_json_root_is_a_reported_error_not_http_500(self):
+        path = self.root / "invalid.json"
+        cfg = SimpleNamespace(default_algorithm="optimized_fast", motion_bundle=path, full_bundle=path)
+        for value in ([], None):
+            with self.subTest(value=value):
+                path.write_text(json.dumps(value), encoding="utf-8")
+                with patch.object(web, "settings", return_value=cfg):
+                    response = self.client.get("/api/capabilities")
+                self.assertEqual(response.status_code, 200)
+                self.assertFalse(response.get_json()["modes"]["optimized_fast"]["usable"])
+
+    def test_capabilities_invalid_bundle_is_not_usable(self):
+        cfg = SimpleNamespace(default_algorithm="optimized_fast", motion_bundle=self.root / "missing.json",
+                              full_bundle=self.root / "missing-full.json")
+        with patch.object(web, "settings", return_value=cfg), patch.object(web, "load_bundle", side_effect=ValueError("invalid")):
+            data = self.client.get("/api/capabilities").get_json()
+        self.assertFalse(data["modes"]["optimized_fast"]["usable"])
+        self.assertFalse(data["modes"]["optimized"]["bundle_verified"])
+        self.assertEqual(data["modes"]["optimized"]["error_code"], "invalid_or_missing_bundle")
 
     def tearDown(self):
         self.root_patch.stop()

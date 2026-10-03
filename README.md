@@ -1,38 +1,35 @@
 # JEPA Lens · 视频异常片段定位
 
-用于研究 **AI 生成视频中的视觉/物理异常时间区间**，并提供一个本地交互式演示工作台。
+一个研究 **AI 生成视频中的视觉与物理异常时间区间** 的开源项目，配套本地交互式工作台。
 
-输入视频后，系统输出候选异常区间、逐帧证据曲线、标注视频与 JSON 报告。候选结果需要人工复核；空候选不等于视频已经通过质量验收。
+上传视频后，可查看候选异常区间、逐帧证据曲线、原片与标注片对照，以及下载 JSON 报告。它帮助发现值得复核的片段，不代替人工判断，也不把空候选当作“视频已经合格”。
 
-> **状态：研究原型 / 源码版。** 本仓库不包含私有视频、标注、预训练权重、当前训练模型包或已录制演示结果。新克隆可以启动前端、运行显式 CPU 运动回退流程和相应测试；不能仅凭本仓库复现当前优化模型的完整推理或开发集成绩。
+> **研究原型。** 仓库包含可直接使用的学习式 CPU 定位模型、完整优化定位模型的发布版 readout，以及公开样例生成器。完整优化与真 JEPA 需要另外准备匹配的官方源码、预训练权重和 GPU 环境；这些资源不由项目的 MIT 许可统一授权，也不会在启动时自动下载。
 
-## 项目做什么
+## 可以体验什么
 
-- 探索 V-JEPA / I-JEPA 预测证据、局部运动残差与 RGB 时序特征在异常定位上的作用。
-- 通过内容分组、折外预测和事件 IoU 指标检查定位能力，而不只看视频级分数。
-- 比较候选生成、拒识、区间合并、边界细化和不同融合方案。
-- 在 `127.0.0.1` 提供上传、任务状态、时间轴回看和结果下载；不作为公网生产服务。
+- **上传分析**：选择自己的视频，查看排队、进度与实际使用的算法。
+- **候选区间与证据曲线**：查看时间范围，点击区间跳转回看。
+- **原片 / 标注片对照**：在浏览器内切换，下载视频与报告。
+- **公开样例**：程序生成平滑运动、位置跳变、消失与重现的视频；先预览，再用选择的模型真实分析。
+- **结果回看**：已完成任务保存在本地，页面刷新或服务重启后可以重新查看。
+- **三种检测模式**：学习式 CPU 运动、完整融合优化、历史真 JEPA 对照；另保留明确标注的规则 CPU 回退。
 
-### 当前算法与名称边界
+### 算法模式
 
-| 模式 | 实际用途 | 额外资源 |
+| 模式 | 实际算法 | 使用条件 |
 | --- | --- | --- |
-| `optimized` | 当前本地默认：校正 JEPA + 运动 RF 0.4 / ET 0.4，RGB + 运动 TCN 0.2，再做区间解码与拒识 | 原始模型包、对应 GPU 特征环境和预训练权重 |
-| `optimized_fast` | 学习式运动定位，不是 JEPA | 独立的运动模型包 |
-| `legacy` | 历史真 JEPA 演示路径，失败时明确标为 CPU 运动回退 | 真 JEPA 需要配置 WSL 与外部资源；显式 CPU 回退不需要 |
+| `optimized_fast` | 学习式运动定位；**不是 JEPA，也不是规则回退** | 安装基础依赖后即可运行，模型随仓库提供 |
+| `optimized` | 校正 V/I-JEPA 与运动 RF/ET，加 RGB 时序头，再进行区间解码与拒识 | 发布 readout 已提供；需要按指南准备外部资源和 CUDA |
+| `legacy` | 历史真 V/I-JEPA 对照 | 同样需要真实模型资源；缺资源时明确标记 CPU 回退，也可手动选择规则 CPU |
 
-“当前默认”不是“所有实验中每个指标最高”，也不代表已证明最优。未通过统一升级护栏的实验分支没有替换默认模型。CPU 运动回退不能被展示成真 JEPA 或优化算法成绩。
+发布模型保留现有基线的学习参数、特征顺序与解码规则，不是为了开源另换了一套算法。新克隆默认选择容易启动的学习式 CPU 模式；**它不等于你配置完整资源后得到的融合模式**。目前默认也不代表所有实验中的单项最高值或已经证明最优。
 
 ## 快速开始
 
-可以在 GitHub 页面点击 **Code → Download ZIP** 下载并解压源码；已安装 Git 的开发者也可以执行：
+### Windows / PowerShell
 
-```text
-git clone https://github.com/Seele-111/jepa-system.git
-cd jepa-system
-```
-
-已验证的本地前端环境：Windows、Python 3.12.9。以下命令在项目根目录的 PowerShell 中执行；仅安装前端和 CPU 路径已有依赖，不安装大型 GPU 框架。
+安装 Python 3.12 后，在项目目录执行：
 
 ```powershell
 python -m venv .venv
@@ -40,78 +37,59 @@ python -m venv .venv
 .\.venv\Scripts\python.exe code\demo_app.py
 ```
 
-打开 `http://127.0.0.1:5002/`。首次克隆没有模型包，页面默认的 `optimized` 模式不能完成推理；不要把页面成功打开当成算法已经可用。快捷样例也需要本地视频与录制报告，本仓库不附带它们。
+打开 **http://127.0.0.1:5002/**。点击一个公开样例，预览后选择“用当前模式分析样例”；也可以上传自己的视频。默认是学习式 CPU 模式，无需你的私有数据、缓存或 GPU。
 
-### 不依赖私有模型的 CPU 流程
+### Linux
 
-将 `C:\path\to\input.mp4` 替换成自己有使用权限的视频：
-
-```powershell
-.\.venv\Scripts\python.exe code\demo_detector.py `
-  --video "C:\path\to\input.mp4" `
-  --output "output\cpu-demo" `
-  --algorithm legacy --no-true-jepa
+```bash
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r requirements-demo.txt
+.venv/bin/python code/demo_app.py
 ```
 
-该命令显式运行 **CPU motion fallback**，输出 `demo_report.json` 和 `annotated.mp4`。若本机有 FFmpeg，会尝试输出浏览器兼容的 H.264；没有时可能只能下载标注视频，不能保证浏览器播放。输出视频不保留音频。
+安装 FFmpeg 可以输出更适合浏览器播放的 H.264。没有 FFmpeg 时仍可下载标注视频，但不能保证内嵌播放。标注视频不保留音轨。
 
-恢复已有优化模型、配置 WSL、了解固定路径限制和常见失败，请阅读 [运行指南](docs/RUNNING.md) 与 [模型资源说明](models/README.md)。完整 GPU 路径不是跨机器一键启动包。
+### 获取项目
 
-## 当前评测与限制
-
-当前默认控制的内容分组折外评测：
-
-| 指标 | 结果 |
-| --- | ---: |
-| 事件 F1 @ IoU 0.3 | 55.71% |
-| 事件 F1 @ IoU 0.5 | 34.29% |
-| Frame F1 | 50.89% |
-| 正常视频产生候选 | 1 / 14 |
-| 异常视频无候选 | 22 / 63 |
-| 正确匹配事件 @ IoU 0.5 | 24 / 85 |
-
-这些是 **定位指标，不是视频准确率**。开发集为 77 条视频、76 个内容 SHA 组、6133 帧和 85 个异常事件；该集已经多轮用于开发，不能再称为独立盲测。最新局部时空交互诊断没有通过预先固定的训练准入条件，未训练新定位头，也没有证明产品能力提升。
-
-本仓库提供实现与状态摘要，不提供原始数据及全部实验产物。需要这些资源才能独立复算数值，不能把源码存在视为完整复现证据。详见 [项目状态与评测边界](docs/PROJECT_STATUS.md)。
-
-## 仓库结构
+在 GitHub 点击 **Code → Download ZIP**，解压后按上述步骤运行；开发者也可以：
 
 ```text
-.
-├── code/                     # 检测、特征、训练、评估和现有测试
-│   ├── demo_app.py           # 本地 Flask 工作台
-│   ├── demo_detector.py      # 演示输出与显式回退
-│   ├── optimized_detector.py
-│   ├── optimized_locator.py # portable 推理与事件解码
-│   ├── optimized_model_worker.py
-│   └── templates/demo.html
-├── scripts/                  # 已有启动及研究批处理脚本
-├── docs/                     # 精简运行/状态/仓库规范说明
-├── models/README.md          # 所需模型的说明，不含模型本身
-├── requirements-demo.txt     # 仅前端/CPU 的已验证依赖
-├── AGENTS.md                 # 本仓库协作约束
-├── CONTRIBUTING.md
-└── THIRD_PARTY_NOTICES.md
+git clone https://github.com/Seele-111/jepa-system.git
+cd jepa-system
 ```
 
-保留已有代码结构以避免改变导入与算法接口。研究脚本中仍有原开发环境的绝对路径；它们不是全部可移植的安装入口，不要批量执行 `run_*` 脚本。
+## 使用完整优化和真 JEPA
 
-## 验证与参与
+按照 [资源准备指南](docs/RESOURCE_SETUP.md) 取得固定版本的官方源码与权重，再复制 `jepa-runtime.example.toml` 为本地 `jepa-runtime.toml`，填入自己的资源目录、解释器与 native / WSL 设置。配置和下载资源不会加入 Git。
 
-前端与回退的聚焦检查（使用标准库 `unittest`）：
+完整步骤、命令行分析、低显存模式、输入限制和排障见 [运行指南](docs/RUNNING.md)。模型的来源与严格校验机制见 [模型说明](models/README.md)；实际验证范围见 [发布验收说明](docs/REPRODUCIBLE_RELEASE.md)。
 
-```powershell
-.\.venv\Scripts\python.exe -m unittest discover -s code -p "test_demo.py" -v
-.\.venv\Scripts\python.exe -m unittest discover -s code -p "test_optimized_locator.py" -v
+**资源准备不是可省略步骤。** 缺少权重、源码不匹配或 profile 校验失败时，优化模式会报错，不会偷偷用规则模型替代。原始私有训练视频、标注、缓存和录制演示不随仓库提供，也不是新用户体验工作台的前置条件。
+
+## 能力边界
+
+- 这是上传后使用前后文的离线定位，不承诺实时分析或检出所有物理错误。
+- 分数是模型证据，不是独立校准的异常概率；低置信度和困难案例需要人工复核。
+- 既有开发数据已经多轮用于研究，不作为新的独立盲测。公开 Synthetic 样例只用于体验流程，不是评测或质量证明。
+- 本轮改善的是可分发性与可复现使用，不宣称检测能力因此提升。原始实验记录保持不变。
+- 服务仅监听本机，不附带公网生产级鉴权、存储隔离或多用户部署。
+- 第三方许可单独适用，尤其 I-JEPA 的非商用条款；不能因为本项目使用 MIT 就推定完整链路可以商用。
+
+## 仓库与开发
+
+```text
+code/                         检测、特征、训练、评估、工作台与测试
+scripts/                      既有启动和研究脚本
+models/public/                经审查的下游 readout 与完整性注册表
+jepa-runtime.example.toml     本机配置模板，不含私人路径
+requirements-demo.txt         工作台和学习式 CPU 路径依赖
+docs/                         运行、资源、发布验证与项目状态
 ```
 
-第二条包含 portable 解码与数值测试；与 scikit-learn 的一致性检查在缺少 scikit-learn 时会明确跳过，不代表它们通过。全量训练/GPU 测试需要独立配置 PyTorch、torchvision、scikit-learn 和对应研究资源，`requirements-demo.txt` 不覆盖它们。
+欢迎使用、反馈问题和继续开发。提交问题时请给出所选模式、错误代码与运行环境，不上传敏感视频或凭据。贡献步骤见 [CONTRIBUTING.md](CONTRIBUTING.md)；修改推理、接口或评估协议前请先读 [AGENTS.md](AGENTS.md)。
 
-修改前阅读 [贡献说明](CONTRIBUTING.md)。问题反馈请提供所用模式、代码版本、错误码、资源是否齐备及不含隐私的最小复现；不要上传私有视频、完整请求体、凭据或原始日志。仓库由项目所有者维护，维护者信息以 GitHub 仓库记录为准。
+## License
 
-## 资源、许可与发布规范
+项目所有者有权授权的自有代码与本次发布的下游 readout 采用 [MIT License](LICENSE)。外部预训练模型、上游源码和数据遵循各自条款，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
-- 发布采用源码白名单，不上传私有数据、运行缓存、模型包、媒体和旧研究报告；这些资源保留在本地。
-- 本仓库中项目所有者有权授权的自有代码采用 [MIT License](LICENSE)，允许使用、修改、分享和商业使用，须保留版权与许可声明。第三方资源不因此取得 MIT 授权。
-- 第三方源码、权重与数据各自有独立许可；未完整审定的本地源码副本不随仓库分发。见 [第三方资源说明](THIRD_PARTY_NOTICES.md)。
-- README 的内容组织、相对链接、忽略规则与资源边界参考 GitHub 官方文档；来源列在 [仓库整理依据](docs/REPOSITORY_GUIDE.md)。没有附加自动部署、Actions 工作流、Release 或生产服务。
+**English summary:** JEPA Lens is an open-source research prototype for localizing candidate visual/physical anomalies in generated videos. The checkout includes CPU learned-motion readouts, a full-fusion readout, synthetic sample generation and a localhost review UI. Full fusion and genuine JEPA require separately acquired, pinned upstream resources. Results need human review; synthetic demos are not benchmarks.

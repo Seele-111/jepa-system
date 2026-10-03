@@ -144,7 +144,8 @@ class DemoDispatchTests(unittest.TestCase):
             result=demo.analyze_video('v.mp4','out',algorithm='optimized_fast')
             self.assertEqual(result['algorithm'],'optimized_fast')
             self.assertEqual(optimized.call_args.kwargs['algorithm'],'optimized_fast')
-            self.assertEqual(optimized.call_args.kwargs['bundle_path'].name,'optimized_motion_locator_v1.json')
+            from jepa_runtime import settings
+            self.assertEqual(optimized.call_args.kwargs['bundle_path'],settings().motion_bundle)
             legacy.assert_not_called()
     def test_invalid_public_mode_rejected_before_read(self):
         with self.assertRaises(demo.DemoDetectionError):demo.analyze_video('v.mp4','out',algorithm='unknown')
@@ -158,8 +159,9 @@ class RealBundleCalibrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         root = Path(__file__).resolve().parents[1]
-        cls.bundles = [(root / 'models' / name, load_bundle(root / 'models' / name))
-                       for name in ('optimized_locator_v1.json', 'optimized_motion_locator_v1.json')]
+        from jepa_runtime import settings
+        cfg = settings()
+        cls.bundles = [(path, load_bundle(path)) for path in (cfg.full_bundle, cfg.motion_bundle)]
 
     @staticmethod
     def record_for(bundle):

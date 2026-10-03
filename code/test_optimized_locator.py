@@ -406,7 +406,7 @@ class PortableModelAndSchemaTests(unittest.TestCase):
         for value in ({}, {"schema_version": "old"}, {"schema_version": 1}, [], None):
             with self.subTest(value=value):
                 with patch.object(Path, "read_text", return_value=json.dumps(value)):
-                    with self.assertRaises((ValueError, TypeError, AttributeError)):
+                    with self.assertRaises(ValueError):
                         load_bundle(Path("in-memory-only.json"))
         with patch.object(Path, "read_text", return_value="{not-json"):
             with self.assertRaises(ValueError):

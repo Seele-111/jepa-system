@@ -1,0 +1,86 @@
+{
+  "schema_version": "jepa-public-readout-v1",
+  "models": {
+    "locator": {
+      "file_sha256": "d18d4b224a6c90043694e640c67ef5534440ffc322d505291dcb25d662710e68",
+      "inference_payload_sha256": "7865fcbb414b4b114cbad4a8f565e934ccf275baa535bc452bf66caca0f106f1",
+      "feature_profiles_sha256": "f1f2ccb0a5ebb8e57a5302517aba85c6865436c3b027fa639a2387719b984507",
+      "source_bundle_sha256": "093c14ec9b2ffc91dea776f694a8278bbd2f4d66a1881fe10d8399fc24301dbd"
+    },
+    "motion": {
+      "file_sha256": "18c82131095a8e4bec7828fe321c54038b1ac5b27bbe4d26ff00d2d435cec798",
+      "inference_payload_sha256": "f6129c65e8f14ce51b8cac85ad0d1bf62b64385c49a542f35e954207bc9fcea9",
+      "feature_profiles_sha256": "ad5cbdd9a235b636153ee14fce8c546f963f12978a571c921cd38ae21f4018a7",
+      "source_bundle_sha256": "77e5d7eeb63653c6ddc0ea33da8e455c5b737d46f87c1cfde96c43a1381d5670"
+    }
+  },
+  "resources": {
+    "vjepa_encoder": {
+      "sha256": "897b3578e3d9a9df1b72aecc1f79026de61cb03ce28cb0ea56f56fa30e3a2f94",
+      "size_bytes": 4053222567
+    },
+    "vjepa_predictor": {
+      "sha256": "b417628f1618c8bd52c0f419800b802f65794288c6ef2ff85c1341a1ae587cba",
+      "size_bytes": 16878318788,
+      "source_url": "https://dl.fbaipublicfiles.com/vjepa2/vjepa2_1_vitg_384.pt"
+    },
+    "ijepa_checkpoint": {
+      "sha256": "8e3e9a1fd5aece75357e87644e55e2d345415ad1170ce55ab24f2cd33361c050",
+      "size_bytes": 4104944253
+    },
+    "r3d_checkpoint": {
+      "sha256": "b3b3357ead25631ec9c57362ff2128a92d0427e01e2cd184951a44380c3f2e9d",
+      "size_bytes": 133546016,
+      "source_url": "https://download.pytorch.org/models/r3d_18-b3b3357e.pth"
+    },
+    "vjepa_source": {
+      "source_tree_sha256": "0397155c0fda831ba92ebf0e838d9367a29f53daab355ac87dc5fdadf71f3971",
+      "repository": "https://github.com/facebookresearch/vjepa2",
+      "revision": "204698b45b3712590f06245fbfba32d3be539812",
+      "license": "MIT and upstream Apache-2.0 notices"
+    },
+    "ijepa_source": {
+      "source_tree_sha256": "aa751b5762f09555a606060106ad341929fa3a3f6146a2b174d560ca369d8d1a",
+      "repository": "https://github.com/facebookresearch/ijepa",
+      "revision": "52c1ae95d05f743e000e8f10a1f3a79b10cff048",
+      "license": "CC-BY-NC-4.0"
+    },
+    "ijepa_full": {
+      "sha256": "a373c7b16165092e29bd5714c6ce79c574c4a52b01b64bf4c82dc81e6a82cf0b",
+      "source_url": "https://dl.fbaipublicfiles.com/ijepa/IN22K-vit.g.16-600e.pth.tar"
+    }
+  },
+  "implementation": {
+    "build_optimization_jepa.py": {
+      "sha256": "62f58c13e7fbecaa528edd48887223ea8f473f8390a185b66e7e3ff8f8f6aa2f",
+      "descriptor_ast_sha256": "50ffc7cf80aba3165fc34eab4bfa364efb15eaf6edfdbeb3a19537ec04f6ce2f",
+      "historical_source_sha256": "df052ad1b4341f8fd91ca0d860de4c6c850f53a233b40a565913ad9ad4726397",
+      "review": "Exact descriptor parity against saved training-profile features; whole collection script has since changed. Historical provenance is preserved, not rehashed."
+    },
+    "jepa_model_components.py": {
+      "sha256": "3d3651beb43a31a8d0fc2a21275b67ae06a7b166e9f8a3dcbaf86608cf6396b6"
+    },
+    "vjepa_predictor.py": {
+      "sha256": "60d2cc628779f30813e84c588cab1747d1110e32996e6826da36dc3aed46bb2a"
+    },
+    "ijepa_predictor.py": {
+      "sha256": "32f9f574d44a4000e60340b8585a749f7987c171f4818de0d7cd70669128e581"
+    },
+    "detect_and_report_v4.py": {
+      "sha256": "ac3bcf85d4fceedfca933fb57e1d9f0081b82b09a518f9dcd5afd66db724a161"
+    }
+  },
+  "license_note": "No third-party checkpoints are distributed or relicensed. Review upstream weight terms separately; I-JEPA inference source is noncommercial.",
+  "conversion": {
+    "torch_version": "2.12.0+cu132",
+    "vjepa_encoder_branch": "target_encoder",
+    "vjepa_encoder_dtype": "float32",
+    "ijepa_branches": [
+      "encoder",
+      "target_encoder",
+      "predictor"
+    ],
+    "ijepa_dtype": "bfloat16",
+    "proof": "New conversion outputs match the installed baseline checkpoint SHA-256 exactly; all converted tensors were also compared."
+  }
+}

@@ -1,0 +1,9 @@
+# Existing runtime dependencies for the genuine JEPA / full RGB path.
+# First install pinned Torch/torchvision from the official CUDA index as described
+# in docs/RESOURCE_SETUP.md. No training/detection framework is added here.
+-r requirements-demo.txt
+Pillow==12.2.0
+matplotlib==3.10.9
+PyYAML==6.0.3
+tqdm==4.67.3
+psutil==7.2.2

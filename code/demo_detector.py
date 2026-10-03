@@ -26,8 +26,8 @@ import numpy as np
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_WSL_DISTRO = os.environ.get("JEPA_WSL_DISTRO", "Ubuntu-24.04")
-DEFAULT_WSL_PYTHON = os.environ.get("JEPA_WSL_PYTHON", "/home/zzy/vjepa2-main/vjepa-env/bin/python")
-DEFAULT_WSL_PIPELINE = os.environ.get("JEPA_WSL_PIPELINE", "/home/zzy/jepa_data/detect_and_report_v4.py")
+DEFAULT_WSL_PYTHON = os.environ.get("JEPA_WSL_PYTHON", "python3")
+DEFAULT_WSL_PIPELINE = os.environ.get("JEPA_WSL_PIPELINE", str(PROJECT_ROOT / "code" / "detect_and_report_v4.py"))
 
 TRUE_DEMO_PROFILE = {
     "name": "true-jepa-demo-v1",
@@ -86,16 +86,14 @@ def _run_wsl_true_jepa(video_path: Path, output_dir: Path, *, max_frames: int = 
     # A fresh run directory prevents old output from impersonating a new inference.
     output_dir = output_dir / "true-jepa" / uuid.uuid4().hex[:10]
     output_dir.mkdir(parents=True, exist_ok=False)
-    command = [
-        "wsl.exe", "-d", distro, "--", DEFAULT_WSL_PYTHON,
-        windows_to_wsl_path(PROJECT_ROOT / "code" / "demo_wsl_runner.py"), DEFAULT_WSL_PIPELINE, "0",
-        "--video", windows_to_wsl_path(video_path),
-        "--output", windows_to_wsl_path(output_dir),
-        # Keep the detector timeseries but avoid a second large clip set.
-        "--threshold", "0.99", "--min-gap", "1", "--min-length", "1",
+    from jepa_runtime import model_command, runtime_path
+    command = model_command(PROJECT_ROOT / "code" / "demo_wsl_runner.py", [
+        "--configured-resources", runtime_path(DEFAULT_WSL_PIPELINE), "0",
+        "--video", runtime_path(video_path), "--output", runtime_path(output_dir),
+        "--no-cache", "--threshold", "0.99", "--min-gap", "1", "--min-length", "1",
         "--max-frames", str(int(max_frames)), "--max-keyframes", str(int(max_keyframes)),
         "--use-true-vjepa", "--use-true-ijepa",
-    ]
+    ])
     try:
         proc = subprocess.run(command, cwd=str(PROJECT_ROOT), stdout=subprocess.PIPE,
                               stderr=subprocess.PIPE, timeout=int(timeout), check=False)
@@ -355,7 +353,8 @@ def analyze_video(video_path: str | Path, output_dir: str | Path, *, prefer_true
     """Analyze a video; degradation is explicit and rendering failure is not a model fallback."""
     if algorithm in {'optimized','optimized_fast'}:
         from optimized_detector import analyze_optimized_video,DEFAULT_BUNDLE
-        bundle_path=DEFAULT_BUNDLE if algorithm=='optimized' else PROJECT_ROOT/'models'/'optimized_motion_locator_v1.json'
+        from jepa_runtime import settings
+        bundle_path=settings().full_bundle if algorithm=='optimized' else settings().motion_bundle
         return analyze_optimized_video(video_path,output_dir,bundle_path=bundle_path,timeout=timeout,progress_callback=progress_callback,algorithm=algorithm)
     if algorithm!='legacy':raise DemoDetectionError('unsupported algorithm')
     started = time.perf_counter()
