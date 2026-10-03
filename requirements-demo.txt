@@ -1,0 +1,5 @@
+# Existing packages verified in the local Windows Python 3.12.9 runtime.
+# These pins cover the frontend and explicit CPU motion fallback, not GPU training.
+Flask==3.1.3
+numpy==2.4.4
+opencv-python==4.13.0.92

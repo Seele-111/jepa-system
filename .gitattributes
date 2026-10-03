@@ -1,0 +1,7 @@
+# Keep existing research-source bytes stable: hashes are used in provenance.
+* -text
+*.md text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+requirements-demo.txt text eol=lf
+LICENSE text eol=lf
